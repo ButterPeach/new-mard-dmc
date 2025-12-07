@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- 永久解锁门禁 -->
+<script>
+(function(){
+  const PASS = ['9A86B2','7C4F39','E52B1A']; // 你的卡密
+  const key  = 'mard_unlock';
+  if(localStorage.getItem(key)==='1') return;
+
+  function runLock(){
+    const cover = document.createElement('div');
+    cover.id = 'lockScreen';
+    cover.style.cssText = `
+      position:fixed;inset:0;background:#fff;z-index:9999;
+      display:flex;align-items:center;justify-content:center;
+      flex-direction:column;font-size:18px;
+    `;
+    cover.innerHTML = `
+      <h2>🔒 色号互查网页</h2>
+      <p>请输入购买后获得的<strong>6位解锁码</strong></p>
+      <input id="pwdIn" placeholder="6 位解锁码" maxlength="6" style="padding:8px;font-size:16px;width:160px;text-align:center">
+      <button onclick="checkUnlock()" style="margin-top:12px;padding:8px 16px;font-size:16px">解锁</button>
+      <p id="err" style="color:red;margin-top:8px"></p>
+    `;
+    document.body.appendChild(cover);
+
+    window.checkUnlock = function(){
+      const v = document.getElementById('pwdIn').value.toUpperCase();
+      if(PASS.includes(v)){
+        localStorage.setItem(key,'1');
+        cover.remove();
+      }else{
+        document.getElementById('err').textContent = '解锁码错误，请重新输入';
+      }
+    };
+  }
+
+  // DOM 就绪再执行
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',runLock);
+  }else{
+    runLock();
+  }
+})();
+</script>
+<meta charset="UTF-8">
+<title>MARD ↔ DMC 色号互查</title>
+<style>
+    body{font-family:Arial;margin:40px;background:#f7f7f7}
+    h1{text-align:center}
+    .box{background:#fff;padding:20px;border-radius:8px;max-width:760px;margin:auto;box-shadow:0 0 10px rgba(0,0,0,.1)}
+    label{display:block;margin-top:15px;font-weight:bold}
+    input[type=text]{width:100%;padding:8px;margin-top:5px;font-size:16px}
+    button{width:100%;padding:10px;margin-top:20px;font-size:16px;background:#007bff;color:#fff;border:none;border-radius:4px;cursor:pointer}
+    button:hover{background:#0056b3}
+    table{width:100%;margin-top:10px;border-collapse:collapse}
+    th,td{padding:8px;text-align:center;border:1px solid #ddd}
+    .ok{background:#d4edda}
+    h3{margin:30px 0 10px 0;font-size:18px;color:#333}
+    .chk-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;max-height:220px;overflow-y:auto;border:1px solid #ccc;padding:8px;border-radius:4px;background:#fafafa}
+    .chk-grid label{display:inline-flex;align-items:center;background:#e7f3ff;padding:4px 8px;border-radius:4px;font-size:14px;white-space:nowrap}
+    .chk-grid input{margin-right:4px}
+    .color-swatch{display:inline-block;width:26px;height:26px;border:1px solid #ccc;vertical-align:middle;margin-left:6px;border-radius:3px}
+    .batch-bar{display:flex;gap:8px;margin-bottom:8px}
+    .batch-bar button{flex:1;padding:6px;font-size:14px;background:#28a745}
+    .batch-bar button:hover{background:#218838}
+</style>
+</head>
+<body>
+<h1>🎨 MARD ↔ DMC 色号互查器</h1>
+<div style="text-align:center; margin-bottom: 20px; font-size: 0.9em;">
+    <span style="font-weight: bold;">开发者: 黄油小桃</span>
+    <span style="margin-left: 20px;">
+        小红书账号: <a href="https://www.xiaohongshu.com/user/profile/400600792" target="_blank" style="color: #FF2D55; text-decoration: none;">400600792</a>
+    </span>
+</div>
+<div class="box">
+  <label>方向：
+    <select id="mode" onchange="modeChanged()">
+      <option value="m2d">MARD → DMC</option>
+      <option value="d2m">DMC → MARD</option>
+    </select>
+  </label>
+
+  <label>输入色号：
+    <input id="code" placeholder="例如 A10 或 310" onkeypress="if(event.key==='Enter')search()">
+    <span id="inputSwatch"></span>
+  </label>
+
+  <!-- 拥有清单：标题 & 内容 均随方向变化 -->
+  <label>我拥有的 <span id="ownKind">DMC</span> 色号（打勾即可，支持滚动）：
+    <div class="batch-bar">
+      <button type="button" onclick="checkAll(true)">一键全选</button>
+      <button type="button" onclick="checkAll(false)">一键取消</button>
+      <button type="button" onclick="batchCheck()">批量勾选</button>
+    </div>
+    <div id="chkOwn" style="display:flex;gap:12px;">
+  <div style="flex:1;">
+    <b>已拥有</b>
+    <div id="colChecked" class="chk-grid" style="height:220px;"></div>
+  </div>
+  <div style="flex:1;">
+    <b>未拥有</b>
+    <div id="colUnchecked" class="chk-grid" style="height:220px;"></div>
+  </div>
+</div>
+
+  </label>
+
+  <label>+ 添加新色号（回车加入清单）：
+    <input id="addOwn" placeholder="例如 A10 或 3807" onkeypress="if(event.key==='Enter')addCheckbox()">
+  </label>
+
+  <button type="button" onclick="search()">查询</button>
+
+  <div id="results"></div>
+</div>
+
+<script src="data.js"></script>
+<script>
+/* ========== 1. 页面加载时只读一次本地存储 ========== */
+const STORAGE = { dmc:'ownedDMC_v2', mard:'ownedMARD_v2' };
+const ownedMap = {
+  dmc:  new Set(JSON.parse(localStorage.getItem(STORAGE.dmc)  || '[]')),
+  mard: new Set(JSON.parse(localStorage.getItem(STORAGE.mard) || '[]'))
+};
+let curMode = 'm2d';
+function currentKind(){ return curMode === 'm2d' ? 'dmc' : 'mard'; }
+
+/* ========== 2. 渲染两栏 ========== */
+function initCheckboxes(){
+  const kind  = currentKind();
+  const tbl   = kind==='dmc' ? DMC : MARD;
+  const all   = Object.keys(tbl).sort((a,b)=>(parseInt(a)||999999)-(parseInt(b)||999999)||a.localeCompare(b));
+  const checked = ownedMap[kind];
+
+  const colChk = document.getElementById('colChecked');
+  const colUn  = document.getElementById('colUnchecked');
+  colChk.innerHTML = '';
+  colUn.innerHTML  = '';
+
+  all.forEach(code=>{
+    const lbl = document.createElement('label');
+    lbl.innerHTML = `<input type="checkbox" ${checked.has(code)?'checked':''}
+                     onchange="toggleMove('${code}')">${code}`;
+    (checked.has(code) ? colChk : colUn).appendChild(lbl);
+  });
+}
+
+/* ========== 3. 移动 + 落盘 ========== */
+function toggleMove(code){
+  const kind = currentKind();
+  if(ownedMap[kind].has(code)) ownedMap[kind].delete(code);
+  else ownedMap[kind].add(code);
+  localStorage.setItem(STORAGE[kind], JSON.stringify([...ownedMap[kind]]));
+  initCheckboxes();
+}
+
+/* ---------- 其余原有函数 ---------- */
+function modeChanged(){
+  curMode = document.getElementById('mode').value;
+  document.getElementById('ownKind').textContent = curMode === 'm2d' ? 'DMC' : 'MARD';
+  initCheckboxes();
+  document.getElementById('code').value = '';
+  document.getElementById('inputSwatch').innerHTML = '';
+  document.getElementById('results').innerHTML = '';
+}
+
+function checkAll(checked){
+  const kind = currentKind();
+  const tbl  = kind === 'dmc' ? DMC : MARD;
+  if (checked) {
+    Object.keys(tbl).forEach(c => ownedMap[kind].add(c));
+  } else {
+    Object.keys(tbl).forEach(c => ownedMap[kind].delete(c));
+  }
+  localStorage.setItem(STORAGE[kind], JSON.stringify([...ownedMap[kind]]));
+  initCheckboxes();
+}
+
+function batchCheck(){
+  const kind = currentKind();
+  const tbl  = kind === 'dmc' ? DMC : MARD;
+  const raw  = prompt(`请粘贴${kind.toUpperCase()}色号列表（空格/逗号/换行均可）：`);
+  if(!raw) return;
+  const codes = raw.split(/[\s,，]+/).map(s=>s.trim().toUpperCase()).filter(Boolean);
+  const valid = codes.filter(c=>tbl[c]);
+  valid.forEach(c=>ownedMap[kind].add(c));
+  localStorage.setItem(STORAGE[kind], JSON.stringify([...ownedMap[kind]]));
+  initCheckboxes();
+  alert(`已批量勾选 ${valid.length} 个色号！`);
+}
+
+function addCheckbox(){
+  const inp = document.getElementById('addOwn');
+  const v = inp.value.trim().toUpperCase();
+  if(!v) return;
+  const kind = currentKind();
+  const tbl  = kind === 'dmc' ? DMC : MARD;
+  if(!tbl[v]){alert(kind.toUpperCase()+' 表里没有 '+v);return;}
+  if(ownedMap[kind].has(v)){inp.value='';return;}
+  ownedMap[kind].add(v);
+  localStorage.setItem(STORAGE[kind], JSON.stringify([...ownedMap[kind]]));
+  initCheckboxes();
+  inp.value='';
+}
+
+// ---------- 输入实时色块 ----------
+document.getElementById('code').addEventListener('input', e=>{
+  const code = e.target.value.trim().toUpperCase();
+  const sw = document.getElementById('inputSwatch');
+  if(!code){sw.innerHTML='';return;}
+  const tbl = curMode==='m2d' ? MARD : DMC;
+  if(tbl && tbl[code]){
+    const rgb = tbl[code].join(',');
+    sw.innerHTML = `<span class="color-swatch" style="background:rgb(${rgb})" title="RGB(${rgb})"></span>`;
+  }else{
+    sw.innerHTML = '';
+  }
+});
+
+// ---------- CIEDE2000 距离 ----------
+function dist(a,b){
+  const labA = xyzToLab(rgbToXyz(a));
+  const labB = xyzToLab(rgbToXyz(b));
+  const [L1,a1,b1] = labA;
+  const [L2,a2,b2] = labB;
+  const rad = deg => deg * Math.PI / 180;
+  const deg = rad => rad * 180 / Math.PI;
+
+  const C1 = Math.sqrt(a1*a1 + b1*b1);
+  const C2 = Math.sqrt(a2*a2 + b2*b2);
+  const Cbar = (C1 + C2)/2;
+  const G = 0.5 * (1 - Math.sqrt(Math.pow(Cbar,7) / (Math.pow(Cbar,7) + Math.pow(25,7))));
+
+  const ap1 = a1 * (1 + G), ap2 = a2 * (1 + G);
+  const Cp1 = Math.sqrt(ap1*ap1 + b1*b1), Cp2 = Math.sqrt(ap2*ap2 + b2*b2);
+  const h1 = Cp1===0 ? 0 : deg(Math.atan2(b1, ap1));
+  const h2 = Cp2===0 ? 0 : deg(Math.atan2(b2, ap2));
+
+  const dLp = L2 - L1;
+  const dCp = Cp2 - Cp1;
+  let dHp = 0;
+  if (Cp1*Cp2 !== 0) {
+    if (Math.abs(h2 - h1) <= 180) dHp = h2 - h1;
+    else if (h2 - h1 > 180) dHp = h2 - h1 - 360;
+    else dHp = h2 - h1 + 360;
+  }
+  const dHprime = 2 * Math.sqrt(Cp1*Cp2) * Math.sin(rad(dHp / 2));
+
+  const Lp_bar = (L1 + L2)/2;
+  const Cp_bar = (Cp1 + Cp2)/2;
+  let Hp_bar = 0;
+  if (Cp1*Cp2 !== 0) {
+    if (Math.abs(h1 - h2) <= 180) Hp_bar = (h1 + h2)/2;
+    else if (h1 + h2 < 360) Hp_bar = (h1 + h2 + 360)/2;
+    else Hp_bar = (h1 + h2 - 360)/2;
+  }
+  const T = 1 - 0.17*Math.cos(rad(Hp_bar - 30)) + 0.24*Math.cos(rad(2*Hp_bar)) + 0.32*Math.cos(rad(3*Hp_bar + 6)) - 0.20*Math.cos(rad(4*Hp_bar - 63));
+  const R_C = Math.sqrt(Math.pow(Cp_bar,7) / (Math.pow(Cp_bar,7) + Math.pow(25,7)));
+  const R_T = -2 * R_C * Math.sin(rad(60 * Math.exp(-Math.pow((Hp_bar - 275)/25, 2))));
+  const SL = 1 + 0.015 * Math.pow(Lp_bar - 50, 2) / Math.sqrt(20 + Math.pow(Lp_bar - 50, 2));
+  const SC = 1 + 0.045 * Cp_bar;
+  const SH = 1 + 0.015 * Cp_bar * T;
+  const KL = KC = KH = 1;
+
+  return Math.sqrt(
+    Math.pow(dLp / (KL * SL), 2) +
+    Math.pow(dCp / (KC * SC), 2) +
+    Math.pow(dHprime / (KH * SH), 2) +
+    R_T * (dCp / (KC * SC)) * (dHprime / (KH * SH))
+  );
+}
+
+function xyzToLab(xyz){
+  const [x,y,z] = xyz;
+  const f = t => (t > 0.008856) ? Math.pow(t, 1/3) : (7.787 * t) + 16/116;
+  const Xn = 95.047, Yn = 100.000, Zn = 108.883;
+  const xr = f(x / Xn), yr = f(y / Yn), zr = f(z / Zn);
+  return [ (116 * yr) - 16, 500 * (xr - yr), 200 * (yr - zr) ];
+}
+
+function rgbToXyz(rgb){
+  let [r,g,b] = rgb.map(v => v / 255);
+  [r,g,b] = [r,g,b].map(v => (v > 0.04045) ? Math.pow((v + 0.055)/1.055, 2.4) : v / 12.92);
+  return [
+    (r * 0.4124564 + g * 0.3575761 + b * 0.1804375) * 100,
+    (r * 0.2126729 + g * 0.7151522 + b * 0.0721750) * 100,
+    (r * 0.0193339 + g * 0.1191920 + b * 0.9503041) * 100
+  ];
+}
+
+// ---------- 主查询 ----------
+function search(){
+  const code = document.getElementById('code').value.trim().toUpperCase();
+  if(!code){alert('请输入色号');return;}
+
+  let src, dst, srcKey, dstKey;
+  if(curMode==='m2d'){
+    src = MARD; dst = DMC; srcKey='MARD'; dstKey='DMC';
+    if(!src[code]){alert('MARD色表里没有 '+code);return;}
+  }else{
+    src = DMC; dst = MARD; srcKey='DMC'; dstKey='MARD';
+    if(!src[code]){alert('DMC色表里没有 '+code);return;}
+  }
+
+  const srcRgb = src[code];
+  const list = [];
+  for(const k in dst) list.push({code:k, rgb:dst[k], d:dist(srcRgb,dst[k])});
+  list.sort((a,b)=>a.d-b.d);
+
+  const normal    = list.slice(0,3);
+  // 只从“屏幕上已打勾”的色号里挑
+const checkedCodes = new Set(
+  Array.from(document.querySelectorAll('#chkOwn input:checked'))
+       .map(inp => inp.parentElement.textContent.trim())
+);
+const ownedList = list.filter(x => checkedCodes.has(x.code)).slice(0,3);
+
+  showTwoTables(normal, ownedList, dstKey);
+}
+
+// ---------- 输出双表格 ----------
+function showTwoTables(normal, owned, kind){
+  const box = document.getElementById('results');
+  box.innerHTML = '';
+  const makeTable = (arr, cls='') => {
+    let html = '<table><thead><tr><th>排名</th><th>色号</th><th>RGB</th><th>预览</th></tr></thead><tbody>';
+    arr.forEach((o,i)=>{
+      const rgb = o.rgb.join(',');
+      html+=`<tr class="${cls}"><td>${i+1}</td><td>${o.code}</td><td>RGB(${rgb})</td>
+             <td><span class="color-swatch" style="background:rgb(${rgb})" title="RGB(${rgb})"></span></td></tr>`;
+    });
+    html += '</tbody></table>';
+    return html;
+  };
+  let html = '<h3>──────────── 正常推荐（按颜色接近度） ────────────</h3>';
+  html += makeTable(normal);
+  html += '<h3>──────── 你拥有的'+ kind +'色号优先（按接近度） ────────</h3>';
+  html += makeTable(owned, 'ok');
+  box.innerHTML = html;
+}
+
+// ---------- 首次渲染 ----------
+modeChanged();
+</script>
+</body>
+</html>
