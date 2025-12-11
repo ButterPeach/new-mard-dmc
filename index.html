@@ -1,49 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- 永久解锁门禁 -->
-<script>
-(function(){
-  const PASS = ['9A86B2','7C4F39','E52B1A']; // 你的卡密
-  const key  = 'mard_unlock';
-  if(localStorage.getItem(key)==='1') return;
-
-  function runLock(){
-    const cover = document.createElement('div');
-    cover.id = 'lockScreen';
-    cover.style.cssText = `
-      position:fixed;inset:0;background:#fff;z-index:9999;
-      display:flex;align-items:center;justify-content:center;
-      flex-direction:column;font-size:18px;
-    `;
-    cover.innerHTML = `
-      <h2>🔒 色号互查网页</h2>
-      <p>请输入购买后获得的<strong>6位解锁码</strong></p>
-      <input id="pwdIn" placeholder="6 位解锁码" maxlength="6" style="padding:8px;font-size:16px;width:160px;text-align:center">
-      <button onclick="checkUnlock()" style="margin-top:12px;padding:8px 16px;font-size:16px">解锁</button>
-      <p id="err" style="color:red;margin-top:8px"></p>
-    `;
-    document.body.appendChild(cover);
-
-    window.checkUnlock = function(){
-      const v = document.getElementById('pwdIn').value.toUpperCase();
-      if(PASS.includes(v)){
-        localStorage.setItem(key,'1');
-        cover.remove();
-      }else{
-        document.getElementById('err').textContent = '解锁码错误，请重新输入';
-      }
-    };
-  }
-
-  // DOM 就绪再执行
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',runLock);
-  }else{
-    runLock();
-  }
-})();
-</script>
 <meta charset="UTF-8">
 <title>MARD ↔ DMC 色号互查</title>
 <style>
@@ -170,6 +127,9 @@ function modeChanged(){
 function checkAll(checked){
   const kind = currentKind();
   const tbl  = kind === 'dmc' ? DMC : MARD;
+  const action = checked ? '全选' : '取消全部';
+  if (!confirm(`确定要${action}所有${kind.toUpperCase()}色号吗？`)) return;
+
   if (checked) {
     Object.keys(tbl).forEach(c => ownedMap[kind].add(c));
   } else {
